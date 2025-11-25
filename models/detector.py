@@ -7,6 +7,16 @@ class ObjectDetector:
         self.net = net
         self.classes = classes
         self.output_layers = output_layers
+
+        try:
+            print("📥 OpenCV DNN: GPU (OPENCL) hedefi ayarlanıyor...")
+            self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_DEFAULT) 
+            self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_OPENCL)
+            print("✅ OpenCV DNN: OPENCL hedefi başarıyla ayarlandı.")
+        except Exception as e:
+            print(f"❌ OpenCV DNN: OPENCL ayarlanamadı (Hata: {e})")
+            print("ℹ️ OpenCV DNN: İşlemler CPU üzerinde devam edecek.")
+
     
     def preprocess_image(self, img):
         """Image ko YOLO ke liye ready karta hai"""
@@ -35,7 +45,6 @@ class ObjectDetector:
                 confidence = scores[class_id]
                 
                 if confidence > Config.CONFIDENCE_THRESHOLD:
-                    # Bounding box calculations
                     center_x = int(detection[0] * width)
                     center_y = int(detection[1] * height)
                     w = int(detection[2] * width)
