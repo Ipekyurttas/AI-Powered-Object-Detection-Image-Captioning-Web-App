@@ -7,7 +7,6 @@ def download_file_with_progress(url, filename):
     try:
         print(f"📥 Downloading {filename} from {url}")
         
-        # Streaming download
         response = requests.get(url, stream=True)
         response.raise_for_status()
         
@@ -36,22 +35,21 @@ def main():
     print("🚀 Downloading YOLO Model Files...")
     os.makedirs('models', exist_ok=True)
     
-    # YOLO model files
     model_files = [
         {
             'url': 'https://pjreddie.com/media/files/yolov3.weights',
             'filename': 'models/yolov3.weights',
-            'expected_size': 237  # MB
+            'expected_size': 237  
         },
         {
             'url': 'https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg', 
             'filename': 'models/yolov3.cfg',
-            'expected_size': 0.008  # MB
+            'expected_size': 0.008  
         },
         {
             'url': 'https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names',
             'filename': 'models/coco.names', 
-            'expected_size': 0.001  # MB
+            'expected_size': 0.001  
         }
     ]
     
@@ -59,12 +57,10 @@ def main():
     for file_info in model_files:
         filename = file_info['filename']
         
-        # Check if file already exists with proper size
         if os.path.exists(filename):
             actual_size = os.path.getsize(filename) / (1024 * 1024)
             expected_size = file_info['expected_size']
             
-            # Allow 10% size variation
             if abs(actual_size - expected_size) <= (expected_size * 0.1):
                 print(f"✅ Already exists: {os.path.basename(filename)} ({actual_size:.1f} MB)")
                 continue
@@ -72,7 +68,6 @@ def main():
                 print(f"⚠️  File exists but wrong size: {actual_size:.1f} MB (expected: {expected_size:.1f} MB)")
                 os.remove(filename)
         
-        # Download file
         if not download_file_with_progress(file_info['url'], filename):
             all_success = False
     

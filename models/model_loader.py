@@ -1,35 +1,31 @@
 import cv2
-import numpy as np
+from ultralytics import YOLO
+from transformers import pipeline
 from config.settings import Config
 
 class ModelLoader:
-    def __init__(self):
-        self.net = None
-        self.classes = []
-        self.output_layers = []
-    
-    def load_yolo_model(self):
-        """YOLO model load karta hai"""
+    @staticmethod
+    def load_model(model_type, model_path=None): 
+        """Kullanıcının seçtiği modele göre doğru ağırlık dosyasını yükler"""
         try:
-            print("📥 Loading YOLO model...")
-            self.net = cv2.dnn.readNet(Config.YOLO_WEIGHTS, Config.YOLO_CONFIG)
+            if model_type == "MY YOLO (PC Setup)" or model_type == "YOLO11":
+                if model_path:
+                    return YOLO(model_path)
+                elif model_type == "MY YOLO (PC Setup)":
+                    return YOLO("models/yolo11_pc.pt")
+                else:
+                    return YOLO("yolo11n.pt")
             
-            # Load COCO classes
-            with open(Config.COCO_NAMES, 'r') as f:
-                self.classes = [line.strip() for line in f.readlines()]
+
+            elif model_type == "DETR":
+                return pipeline("object-detection", model=Config.DETR_MODEL_NAME)
             
-            # Get output layers
-            layer_names = self.net.getLayerNames()
-            self.output_layers = [
-                layer_names[i[0] - 1] for i in self.net.getUnconnectedOutLayers()
-            ]
-            
-            print(f"✅ YOLO model loaded! Classes: {len(self.classes)}")
-            return True
-            
+            elif model_type == "YOLOv3":
+                net = cv2.dnn.readNet(Config.YOLO_WEIGHTS, Config.YOLO_CONFIG)
+                with open(Config.COCO_NAMES, 'r') as f:
+                    classes = [line.strip() for line in f.readlines()]
+                return {"net": net, "classes": classes}
+                
         except Exception as e:
-            print(f"❌ YOLO model loading error: {e}")
-            return False
-    
-    def get_model_info(self):
-        return self.net, self.classes, self.output_layers
+            print(f"❌ {model_type} yükleme hatası: {e}")
+            return None

@@ -1,172 +1,134 @@
 import streamlit as st
-from transformers import pipeline
 from PIL import Image
-import time
-import cv2
 import numpy as np
+import cv2
+import time
+import os
 
-# Initialize session state
-if 'models_loaded' not in st.session_state:
-    st.session_state.models_loaded = False
-if 'detector' not in st.session_state:
-    st.session_state.detector = None
-if 'captioner' not in st.session_state:
-    st.session_state.captioner = None
-
-def load_models():
-    """Models load karta hai"""
-    try:
-        with st.spinner("🔄 Loading Object Detection Model..."):
-            st.session_state.detector = pipeline(
-                "object-detection", 
-                model="facebook/detr-resnet-50"
-            )
-        
-        with st.spinner("🔄 Loading Captioning Model..."):
-            st.session_state.captioner = pipeline(
-                "image-to-text", 
-                model="Salesforce/blip-image-captioning-base"
-            )
-        
-        st.session_state.models_loaded = True
-        st.success("✅ Models loaded successfully!")
-        return True
-        
-    except Exception as e:
-        st.error(f"❌ Model loading failed: {e}")
-        return False
-
-def detect_objects(image):
-    """Object detection karta hai"""
-    if st.session_state.detector is None:
-        raise ValueError("Detector not loaded!")
-    return st.session_state.detector(image)
-
-def generate_caption(image):
-    """Caption generate karta hai"""
-    if st.session_state.captioner is None:
-        raise ValueError("Captioner not loaded!")
-    result = st.session_state.captioner(image)
-    return result[0]['generated_text']
-
-def draw_boxes(image, detections):
-    """Bounding boxes draw karta hai"""
-    img_array = np.array(image)
-    img_cv = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-    
-    for detection in detections:
-        box = detection['box']
-        label = detection['label']
-        score = detection['score']
-        
-        x, y, w, h = int(box['xmin']), int(box['ymin']), int(box['xmax'] - box['xmin']), int(box['ymax'] - box['ymin'])
-        cv2.rectangle(img_cv, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        
-        label_text = f"{label}: {score:.2f}"
-        cv2.putText(img_cv, label_text, (x, y - 10), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    
-    return cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+from models.model_loader import ModelLoader
+from models.detector import ObjectDetector
+from captioning.caption_generator import CaptionGenerator
+from utils.visualizer import ResultVisualizer
+from tracking.mlflow_tracker import MLflowTracker
 
 def main():
-    st.set_page_config(
-        page_title="AI Image Analysis",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
-    st.title("🤗 AI Image Analysis")
+    st.set_page_config(page_title="AI Image Analyzer", layout="wide")
+    st.title("🚀 Multi-Model Object Detection & Captioning")
     st.markdown("---")
+
+    st.sidebar.header("⚙️ Model Ayarları")
+    model_type = st.sidebar.selectbox("Algoritma Seçin:", ["YOLO11", "DETR", "MY YOLO (PC Setup)"])
     
-    # Sidebar
-    st.sidebar.title("⚙️ Controls")
-    
-    # Model loading
-    st.sidebar.subheader("🔧 Model Management")
-    
-    if st.sidebar.button("🔄 Load Models", type="primary"):
-        if load_models():
-            st.rerun()
-    
-    # Show model status
-    if st.session_state.models_loaded:
-        st.sidebar.success("✅ Models Ready!")
-    else:
-        st.sidebar.warning("⚠️ Models Not Loaded")
-    
-    st.sidebar.markdown("---")
-    confidence = st.sidebar.slider("Confidence", 0.1, 0.9, 0.5)
-    
-    # Main area
-    uploaded_file = st.file_uploader(
-        "📁 Upload Image", 
-        type=['jpg', 'jpeg', 'png']
-    )
-    
-    if uploaded_file:
+    if 'loaded_model_type' not in st.session_state:
+        st.session_state.loaded_model_type = None
+
+    if st.sidebar.button("Modeli Aktifleştir", type="primary"):
+        with st.spinner(f"{model_type} yükleniyor..."):
+            st.session_state.detector_model = ModelLoader.load_model(model_type)
+            
+            st.session_state.caption_gen = CaptionGenerator()
+            st.session_state.tracker = MLflowTracker()
+            st.session_state.loaded_model_type = model_type
+            st.sidebar.success(f"✅ {model_type} Hazır!")
+
+    uploaded_file = st.file_uploader("Resim Yükle", type=['jpg', 'png', 'jpeg'])
+
+    if uploaded_file and st.session_state.loaded_model_type:
         image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", use_container_width=True)
+        img_cv_orig = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
         
-        if st.session_state.models_loaded:
-            if st.button("🎯 Analyze Image", type="primary"):
-                with st.spinner("Analyzing..."):
-                    try:
-                        start_time = time.time()
-                        
-                        # Detection
-                        detections = detect_objects(image)
-                        filtered_detections = [d for d in detections if d['score'] > confidence]
-                        
-                        # Captioning
-                        caption = generate_caption(image)
-                        
-                        # Draw boxes
-                        result_img = draw_boxes(image, filtered_detections)
-                        
-                        process_time = time.time() - start_time
-                        
-                        # Display results
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.subheader("🎯 Detection Results")
-                            st.image(result_img, use_container_width=True)
-                        
-                        with col2:
-                            st.subheader("📝 AI Caption")
-                            st.info(caption)
-                            
-                            st.metric("Objects Found", len(filtered_detections))
-                            st.metric("Process Time", f"{process_time:.2f}s")
-                            
-                            if filtered_detections:
-                                st.write("**Detections:**")
-                                for det in filtered_detections:
-                                    st.write(f"- {det['label']} ({det['score']:.2%})")
-                            
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-        else:
-            st.warning("⚠️ Please load models first using the sidebar button!")
-    
+        if st.button("🎯 Analizi Başlat", type="primary"):
+            st.session_state.tracker.start_run(run_name=f"{model_type}_Analysis")
+            start_time = time.time()
+            
+            with st.spinner("Yapay zeka analiz ediyor..."):
+                try:
+                    effective_type = "YOLO11" if "YOLO" in model_type else model_type
+                    detector = ObjectDetector(st.session_state.detector_model, effective_type)
+                    boxes, confs, class_ids, classes, indexes = detector.detect(image)
+                    
+                    ai_caption = st.session_state.caption_gen.generate_ai_caption(uploaded_file)
+
+                    st.session_state.analysis_results = {
+                        'boxes': boxes,
+                        'confs': confs,
+                        'class_ids': class_ids,
+                        'classes': classes,
+                        'indexes': indexes,
+                        'ai_caption': ai_caption,
+                        'img_cv': img_cv_orig.copy()
+                    }
+                    st.session_state.analyzed = True
+                    st.session_state.process_time = time.time() - start_time
+                
+                except Exception as e:
+                    st.error(f"Hata oluştu: {e}")
+
+        if st.session_state.get('analyzed'):
+            res = st.session_state.analysis_results
+            st.markdown("---")
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col2:
+                st.subheader("📊 Analiz Özeti")
+                st.info(f"**AI Yorumu:** {res['ai_caption']}")
+                st.metric("İşlem Süresi", f"{st.session_state.process_time:.2f}s")
+                st.metric("Toplam Nesne", len(res['boxes']))
+                
+                if len(res['boxes']) > 0:
+                    st.write("### 📦 Nesne Detayları")
+                    obj_list = ["Hepsini Göster"] + [
+                        f"{i+1}. {res['classes'][res['class_ids'][idx]].capitalize()} (%{res['confs'][idx]*100:.1f})" 
+                        for i, idx in enumerate(res['indexes'].flatten())
+                    ]
+                    
+                    selected_option = st.selectbox("Odaklanılacak Nesne:", obj_list)
+                else:
+                    st.warning("Nesne bulunamadı.")
+                    selected_option = "Hepsini Göster"
+
+            with col1:
+                st.subheader("🎯 Görselleştirme")
+                viz = ResultVisualizer(res['classes'])
+                display_img = res['img_cv'].copy()
+
+                if selected_option == "Hepsini Göster":
+                    final_img = viz.draw_detections(
+                        display_img, 
+                        res['boxes'], 
+                        res['confs'], 
+                        res['class_ids'], 
+                        res['indexes']
+                    )
+                    st.image(cv2.cvtColor(final_img, cv2.COLOR_BGR2RGB), use_container_width=True)
+                
+                else:
+                    selected_idx_num = int(selected_option.split(".")[0]) - 1
+                    actual_idx = res['indexes'].flatten()[selected_idx_num]
+                    
+                    box = res['boxes'][actual_idx] 
+                    label = res['classes'][res['class_ids'][actual_idx]]
+                    conf_val = res['confs'][actual_idx]
+                    
+                    x, y, w, h = box
+                    x, y = max(0, x), max(0, y)
+                    
+                    label_text = f"{label.capitalize()}: %{conf_val*100:.1f}"
+                    cv2.rectangle(display_img, (x, y), (x + w, y + h), (0, 255, 0), 3)
+                    cv2.putText(display_img, label_text, (x, y - 10), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    
+                    st.image(cv2.cvtColor(display_img, cv2.COLOR_BGR2RGB), use_container_width=True)
+                    
+                    crop_img = res['img_cv'][y:y+h, x:x+w]
+                    st.write(f"🔍 **Seçili Nesne Yakın Çekim:** {label.capitalize()}")
+                    st.image(cv2.cvtColor(crop_img, cv2.COLOR_BGR2RGB), width=250)
+
+            st.session_state.tracker.log_parameters(st.session_state.loaded_model_type)
+            st.session_state.tracker.end_run()
     else:
-        st.info("👆 Upload an image to get started!")
-        
-        # Instructions
-        st.markdown("""
-        ### 🚀 How to Use:
-        1. **Click 'Load Models'** in sidebar
-        2. **Wait for models to load** (first time may take 2-3 minutes)
-        3. **Upload an image**
-        4. **Click 'Analyze Image'**
-        5. **View results!**
-        
-        ### ✨ Features:
-        - Object Detection with DETR
-        - AI Image Captioning with BLIP
-        - Real-time analysis
-        - No manual downloads needed
-        """)
+        st.info("💡 Başlamak için önce yan menüden bir model aktifleştirin.")
 
 if __name__ == "__main__":
     main()

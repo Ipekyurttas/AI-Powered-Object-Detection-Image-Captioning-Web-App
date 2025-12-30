@@ -1,64 +1,33 @@
-import cv2
 import numpy as np
-from config.settings import Config
+import cv2
 
 class ObjectDetector:
-    def __init__(self, net, classes, output_layers):
-        self.net = net
-        self.classes = classes
-        self.output_layers = output_layers
+    def __init__(self, model, model_type):
+        self.model = model
+        self.model_type = model_type
 
-        try:
-            print("📥 OpenCV DNN: GPU (OPENCL) hedefi ayarlanıyor...")
-            self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_DEFAULT) 
-            self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_OPENCL)
-            print("✅ OpenCV DNN: OPENCL hedefi başarıyla ayarlandı.")
-        except Exception as e:
-            print(f"❌ OpenCV DNN: OPENCL ayarlanamadı (Hata: {e})")
-            print("ℹ️ OpenCV DNN: İşlemler CPU üzerinde devam edecek.")
+    def detect(self, image):
+        """Seçili modele göre tespit yapar ve ortak format döndürür"""
+        boxes, confs, class_ids, classes = [], [], [], {}
 
-    
-    def preprocess_image(self, img):
-        """Image ko YOLO ke liye ready karta hai"""
-        blob = cv2.dnn.blobFromImage(
-            img, 0.00392, (Config.IMG_SIZE, Config.IMG_SIZE), 
-            (0, 0, 0), True, crop=False
-        )
-        self.net.setInput(blob)
-        return blob
-    
-    def detect_objects(self, img):
-        """Objects detect karta hai"""
-        self.preprocess_image(img)
-        outputs = self.net.forward(self.output_layers)
-        return self._process_detections(outputs, img)
-    
-    def _process_detections(self, outputs, img):
-        """Raw detections ko process karta hai"""
-        height, width = img.shape[:2]
-        boxes, confs, class_ids = [], [], []
+        if self.model_type == "YOLO11":
+            results = self.model(image)[0]
+            classes = results.names
+            for box in results.boxes:
+                coords = box.xyxy[0].tolist() 
+                boxes.append([int(coords[0]), int(coords[1]), int(coords[2]-coords[0]), int(coords[3]-coords[1])])
+                confs.append(float(box.conf[0]))
+                class_ids.append(int(box.cls[0]))
+            return boxes, confs, class_ids, classes, np.arange(len(boxes))
+
+        elif self.model_type == "DETR":
+            results = self.model(image)
+            for i, res in enumerate(results):
+                b = res['box']
+                boxes.append([b['xmin'], b['ymin'], b['xmax']-b['xmin'], b['ymax']-b['ymin']])
+                confs.append(res['score'])
+                class_ids.append(i)
+                classes[i] = res['label']
+            return boxes, confs, class_ids, classes, np.arange(len(boxes))
         
-        for output in outputs:
-            for detection in output:
-                scores = detection[5:]
-                class_id = np.argmax(scores)
-                confidence = scores[class_id]
-                
-                if confidence > Config.CONFIDENCE_THRESHOLD:
-                    center_x = int(detection[0] * width)
-                    center_y = int(detection[1] * height)
-                    w = int(detection[2] * width)
-                    h = int(detection[3] * height)
-                    x = int(center_x - w/2)
-                    y = int(center_y - h/2)
-                    
-                    boxes.append([x, y, w, h])
-                    confs.append(float(confidence))
-                    class_ids.append(class_id)
-        
-        return boxes, confs, class_ids
-    
-    def apply_nms(self, boxes, confs):
-        """Non-Maximum Suppression apply karta hai"""
-        indexes = cv2.dnn.NMSBoxes(boxes, confs, Config.CONFIDENCE_THRESHOLD, Config.NMS_THRESHOLD)
-        return indexes
+        return None, None, None, None, None

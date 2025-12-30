@@ -15,11 +15,9 @@ class ResultVisualizer:
                 x, y, w, h = boxes[i]
                 label = str(self.classes[class_ids[i]])
                 confidence = confs[i]
-                
-                # Color select karo
+            
                 color = self._get_color(label)
                 
-                # Box aur label draw karo
                 cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
                 cv2.putText(img, f"{label} {confidence:.2f}", 
                            (x, y - 10), font, 1, color, 2)
@@ -41,26 +39,23 @@ class ResultVisualizer:
         """Image par caption add karta hai"""
         img_with_text = img.copy()
         
-        # Text background
         text_bg_height = 80
         cv2.rectangle(img_with_text, 
                      (0, img.shape[0] - text_bg_height), 
                      (img.shape[1], img.shape[0]), 
                      (0, 0, 0), -1)
         
-        # Text add karo (multiline)
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.6
         font_color = (255, 255, 255)
         
-        # Split caption into lines
         words = caption.split()
         lines = []
         current_line = ""
         
         for word in words:
             test_line = current_line + " " + word if current_line else word
-            if len(test_line) < 60:  # Adjust based on image width
+            if len(test_line) < 60: 
                 current_line = test_line
             else:
                 lines.append(current_line)
@@ -68,9 +63,9 @@ class ResultVisualizer:
         if current_line:
             lines.append(current_line)
         
-        # Draw lines
+
         y_position = img.shape[0] - text_bg_height + 30
-        for i, line in enumerate(lines[:2]):  # Max 2 lines
+        for i, line in enumerate(lines[:2]):  
             cv2.putText(img_with_text, line, 
                        (10, y_position + i * 25), 
                        font, font_scale, font_color, 1)

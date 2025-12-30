@@ -1,0 +1,14 @@
+artifact_uri: /Users/ipek/Downloads/AI-Powered-Object-Detection-Image-Captioning-Web-App-1/runs/mlflow/275437460596426797/dffcd244ec3844c381244bd83531f189/artifacts
+end_time: 1767097622107
+entry_point_name: ''
+experiment_id: '275437460596426797'
+lifecycle_stage: active
+run_id: dffcd244ec3844c381244bd83531f189
+run_name: train
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1767097468786
+status: 3
+tags: []
+user_id: ipek
